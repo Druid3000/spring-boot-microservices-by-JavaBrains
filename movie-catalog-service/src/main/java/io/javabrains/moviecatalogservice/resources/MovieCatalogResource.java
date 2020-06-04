@@ -5,6 +5,8 @@ import io.javabrains.moviecatalogservice.models.CatalogItem;
 import io.javabrains.moviecatalogservice.models.Movie;
 import io.javabrains.moviecatalogservice.models.Rating;
 import io.javabrains.moviecatalogservice.models.UserRating;
+import io.javabrains.moviecatalogservice.service.MovieInfo;
+import io.javabrains.moviecatalogservice.service.UserRatingInfo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,24 +32,22 @@ public class MovieCatalogResource {
     @Autowired
     private WebClient.Builder webClientBuilder;
 
+    @Autowired
+    MovieInfo movieInfo;
+
+    @Autowired
+    UserRatingInfo userRatingInfo;
+
     @RequestMapping("/{userId}")
-    @HystrixCommand(fallbackMethod = "getFallbackCatalog")
     public List<CatalogItem> getCatalog(@PathVariable("userId") String userId){
 
-        UserRating ratings = restTemplate.getForObject("http://ratings-data-service/ratingsdata/users/" + userId, UserRating.class);
+        UserRating ratings = userRatingInfo.getUserRating(userId);
 
-        return ratings.getUserRating().stream().map(rating -> {
-            ///For each movieID, call movie info service and get details
-            Movie movie = restTemplate.getForObject("http://movie-info-service/movies/" + rating.getMovieId(), Movie.class);
-            //Put them all together
-            return new CatalogItem(movie.getName(), movie.getDescription(), rating.getRating());
-        })
-        .collect(Collectors.toList());
+        return ratings.getUserRating().stream()
+                .map(rating -> movieInfo.getCatalogItem(rating))
+                .collect(Collectors.toList());
     }
 
-    public List<CatalogItem> getFallbackCatalog(@PathVariable("userId") String userId){
-        return Arrays.asList(new CatalogItem("No movie", "", 0));
-    }
 }
 
 
